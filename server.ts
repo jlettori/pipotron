@@ -39,7 +39,7 @@ const routes: Route[] = [
     method: ["GET"],
     pattern: new URLPattern({ pathname: "/" }),
     handler: (req: Request) => {
-      return serveFile(req, "./static/index.html", );
+      return serveFile(req, "./static/index.html");
     },
   },
   {
