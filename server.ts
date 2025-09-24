@@ -36,32 +36,31 @@ async function ProxyOffre(noOffre: string): Promise<Response> {
 
 const routes: Route[] = [
   {
+    method: ["GET"],
     pattern: new URLPattern({ pathname: "/" }),
     handler: (req: Request) => {
-      console.log("pipo index.html");
-      return serveFile(req, "./static/index.html");
+      return serveFile(req, "./static/index.html", );
     },
   },
   {
+    method: ["GET"],
     pattern: new URLPattern({ pathname: "/static/*" }),
     handler: (req: Request) => {
-      console.log("pipo static ", req.url);
       return serveDir(req);
     },
   },
   {
     method: ["GET"],
-    pattern: new URLPattern({ pathname: "/api/offres/:id" }),
+    pattern: new URLPattern({ pathname: "/api/offres/:noOffre" }),
     handler: (req: Request, params) => {
-      console.log("pipo id=", params?.pathname.groups.id);
-      return ProxyOffre(params?.pathname.groups.id);
+      console.log("noOffre =", params?.pathname.groups.noOffre);
+      return ProxyOffre(params?.pathname.groups.noOffre);
     },
   },
 ];
 
 function defaultHandler(req: Request) {
-  console.log("pipo defaultHandler", req.url);
-  return new Response("pipo Not found", { status: 404 });
+  return new Response(`Page non trouvée ${req.url}`, { status: 404 });
 }
 
 Deno.serve(route(routes, defaultHandler));

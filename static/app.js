@@ -65,7 +65,7 @@ const initOffres = () => {
     const newRow = tbody.insertRow();
     newRow.innerHTML = `
         <th scope="row">
-            <a href="${apiOffre}${noOffre}" target="_blank">${noOffre}</a>
+            <a href="https://${lienOffre}${noOffre}" target="_blank">${noOffre}</a>
         </th>
         <td id="statut${noOffre}">Récupération en cours ...</td>`;
   }
@@ -79,7 +79,7 @@ const fetchOffre = async (noOffre) => {
       switch (response.status) {
         case 200:
           return response.text();
-        case 404:
+        case 500:
           return Promise.reject("Offre non disponible");
         default:
           return Promise.reject(`Erreur inconnue ${response.status})`);
