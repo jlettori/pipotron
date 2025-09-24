@@ -18,13 +18,16 @@ const tags = [
   "#rechercheemploi",
 ];
 const avantagesDispo = [
-  "Mutuelle",
-  "Hébergement",
-  "Restauration",
   "Chèque repas",
-  "Primes",
-  "Pc portable",
+  "Complémentaire santé",
   "CSE",
+  "Hébergement",
+  "Mutuelle",
+  "Paniers repas",
+  "Pc portable",
+  "Primes",
+  "Restauration",
+  "Titres restaurant / Prime de panier",
 ];
 const periodicite = {
   horaire: "Horaire",
@@ -98,7 +101,7 @@ const fetchOffre = async (noOffre) => {
 
       const offre = parseOffre(body);
       if (typeof offre === "string") {
-        offres.set(noOffre, { ok: false, statut: "⛔ " + offre });
+        offres.set(noOffre, { ok: false, statut: `⛔ ${offre}` });
         return;
       }
 
@@ -106,14 +109,14 @@ const fetchOffre = async (noOffre) => {
       nbOffres++;
     })
     .catch((error) => {
-      offres.set(noOffre, { ok: false, statut: "⛔ " + error });
+      offres.set(noOffre, { ok: false, statut: `⛔ ${error}` });
     });
 
   StatutOffre(noOffre);
 };
 
 const StatutOffre = (noOffre) => {
-  const elt = document.getElementById("statut" + noOffre);
+  const elt = document.getElementById(`statut${noOffre}`);
   elt.innerText = offres.get(noOffre).statut;
 };
 
@@ -124,9 +127,7 @@ const parseOffre = (body) => {
     return "Titre introuvable";
   }
 
-  const titre =
-    oTitre.replace(/\s\s+/g, " ").replace(/\(?\s?H\s?\/\s?F\s?\)?/i, "") +
-    " (H/F)";
+  const titre = oTitre.replace(/\s*\(?\s*H\s*\/\s*F\s*\)?/gi, "") + " (H/F)";
 
   const oDescription = body.querySelector('div[itemprop="description"]')
     ?.innerText;
@@ -183,6 +184,14 @@ const parseOffre = (body) => {
   const dateFin = body.querySelector('span[itemprop="validThrough"]')
     ?.getAttribute("content");
 
+  const avantages = [];
+  let statut = `${titre} à ${lieu}`;
+  let salaireMin = 0.0;
+  let salaireMax = 0.0;
+  let salaireDuree = 12;
+  let salairePeriode = periodicite.inconnu;
+  let salaireBrut = true;
+
   const oSalaire = body.querySelector('span[itemprop="baseSalary"]')?.parentNode
     .textContent;
   if (oSalaire === undefined) {
@@ -193,65 +202,65 @@ const parseOffre = (body) => {
     /(?<n1>(?:\d{1,3}\s)?\d{2,}(?:[.,]\d{1,2})?)(?:\D+(?<n2>(?:\d{1,3}\s)?\d{2,}(?:[.,]\d{1,2})?))?(?:\D+(?<n3>\d{2,}(?:[.,]\d{1,2})?))?(?:.*(?<net>\bnet))?/i;
   const matchSal = oSalaire.match(reSalaire);
   if (matchSal === null) {
-    return "Format salaire incorrect";
-  }
-
-  let salaireMin = 0.0;
-  let salaireMax = 0.0;
-  let salaireDuree = 12;
-  let salairePeriode = periodicite.inconnu;
-  const salaireBrut = matchSal.groups.net === undefined;
-
-  const n1 =
-    parseFloat(matchSal.groups.n1?.replaceAll(",", ".").replaceAll(" ", "")) ||
-    0;
-  const n2 =
-    parseFloat(matchSal.groups.n2?.replaceAll(",", ".").replaceAll(" ", "")) ||
-    0;
-  const n3 =
-    parseFloat(matchSal.groups.n3?.replaceAll(",", ".").replaceAll(" ", "")) ||
-    0;
-
-  if (n1 <= 0) {
-    return "Salaire non défini";
-  }
-
-  salaireMin = n1;
-  salaireMax = n1;
-
-  if (n3 <= 0 && n2 <= 0) {
-    // si ça arrive, pas de problème salaireMax = salaireMin et salaireDuree = 12
-  } else if (n3 <= 0 && n2 > n1) {
-    salaireMax = n2;
-  } else if (n3 <= 0 && n2 >= 12 && n2 <= salaireDureeMax) {
-    salaireDuree = n2;
-  } else if (n2 > n1 && n3 >= 12 && n3 <= salaireDureeMax) {
-    salaireMax = n2;
-    salaireDuree = n3;
+    statut = `⚠️ salaire non renseigné - ${statut}`;
   } else {
-    return `Format de salaire incorrect avec les valeurs ${n1}, ${n2}, ${n3}`;
-  }
+    const n1 = parseFloat(
+      matchSal.groups.n1?.replaceAll(",", ".").replaceAll(" ", ""),
+    ) ||
+      0;
+    const n2 = parseFloat(
+      matchSal.groups.n2?.replaceAll(",", ".").replaceAll(" ", ""),
+    ) ||
+      0;
+    const n3 = parseFloat(
+      matchSal.groups.n3?.replaceAll(",", ".").replaceAll(" ", ""),
+    ) ||
+      0;
 
-  // Tous les salaires sont convertis en salaires mensuels
-  if (salaireMin > salaireMensuelMax) {
-    salairePeriode = periodicite.annuel;
-    salaireMin /= 12;
-    salaireMax /= 12;
-  } else if (salaireMin > salaireHoraireMax) {
-    salairePeriode = periodicite.mensuel;
-  } else if (salaireMin > 0) {
-    salairePeriode = periodicite.horaire;
-    const semainesParMois = 52 / 12;
-    salaireMin *= horaireHebdo * semainesParMois;
-    salaireMax *= horaireHebdo * semainesParMois;
-  }
+    if (n1 <= 0) {
+      statut = `⚠️ salaire non identifié - ${statut}`;
+    } else {
+      salaireMin = n1;
+      salaireMax = n1;
 
-  salaireMin = Math.ceil(salaireMin);
-  salaireMax = Math.ceil(salaireMax);
+      if (n3 <= 0 && n2 <= 0) {
+        // si ça arrive, pas de problème salaireMax = salaireMin et salaireDuree = 12
+      } else if (n3 <= 0 && n2 > n1) {
+        salaireMax = n2;
+      } else if (n3 <= 0 && n2 >= 12 && n2 <= salaireDureeMax) {
+        salaireDuree = n2;
+      } else if (n2 > n1 && n3 >= 12 && n3 <= salaireDureeMax) {
+        salaireMax = n2;
+        salaireDuree = n3;
+      } else {
+        statut = `⚠️ salaire mal formaté ${n1}, ${n2}, ${n3} - ${statut}`;
+      }
 
-  const avantages = [];
-  if (salaireDuree > 12 && salaireDuree <= salaireDureeMax) {
-    avantages.push(`salaire sur ${salaireDuree} mois`);
+      salaireBrut = matchSal.groups.net === undefined;
+
+      // Tous les salaires sont convertis en salaires mensuels
+      if (salaireMin > salaireMensuelMax) {
+        salairePeriode = periodicite.annuel;
+        salaireMin /= 12;
+        salaireMax /= 12;
+      } else if (salaireMin > salaireHoraireMax) {
+        salairePeriode = periodicite.mensuel;
+      } else if (salaireMin > 0) {
+        salairePeriode = periodicite.horaire;
+        const semainesParMois = 52 / 12;
+        salaireMin *= horaireHebdo * semainesParMois;
+        salaireMax *= horaireHebdo * semainesParMois;
+      }
+
+      salaireMin = Math.ceil(salaireMin);
+      salaireMax = Math.ceil(salaireMax);
+
+      if (salaireDuree > salaireDureeMax) {
+        statut = `⚠️ salaire sur ${salaireDuree} mois incorrect - ${statut}`;
+      } else if (salaireDuree > 12 && salaireDuree <= salaireDureeMax) {
+        avantages.push(`salaire sur ${salaireDuree} mois`);
+      }
+    }
   }
 
   const debutant = body.querySelector('span[itemprop="experienceRequirements"]')
@@ -267,7 +276,7 @@ const parseOffre = (body) => {
   }
 
   return {
-    statut: `${titre} à ${lieu}`,
+    statut: statut,
     ok: true,
     titre: titre,
     description: oDescription,
