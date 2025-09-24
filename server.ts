@@ -52,7 +52,7 @@ const routes: Route[] = [
   {
     method: ["GET"],
     pattern: new URLPattern({ pathname: "/api/offres/:noOffre" }),
-    handler: (req: Request, params) => {
+    handler: (_req: Request, params) => {
       console.log("noOffre =", params?.pathname.groups.noOffre);
       return ProxyOffre(params?.pathname.groups.noOffre);
     },
