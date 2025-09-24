@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <title>Publier des offres</title>
+
+    <link rel="icon" href="./static/favicon.ico">
+    <link
+      href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.7/dist/css/bootstrap.min.css"
+      rel="stylesheet"
+      integrity="sha384-LN+7fdVzj6u52u30Kp6M/trliBMCMKTyK833zpbD+pXdCLuTusPj697FH4R/5mcr"
+      crossorigin="anonymous"
+    >
+    <script
+      src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.7/dist/js/bootstrap.bundle.min.js"
+      integrity="sha384-ndDqU0Gzau9qJ1lfW4pNLlhNTkCfHzAVBReH9diLvGRem5+R9g2FzA8ZGN954O5Q"
+      crossorigin="anonymous"
+    ></script>
+    <script defer src="./static/app.js"></script>
+  </head>
+  <body class="bg-light">
+    <div class="container-fluid gap-3">
+      <h1 class="display-1 m-3">Publier des offres</h1>
+      <div class="card bg-light shadow-sm">
+        <form id="form" action="#" method="get">
+          <div class="input-group-text m-3">
+            <textarea
+              id="texte"
+              name="texte"
+              placeholder="Saisir ou coller du texte avec des numéros d'offres d'emploi France Travail"
+              class="form-control"
+              rows="3"
+              style="resize: vertical; overflow-y: hidden"
+              aria-label="Saisir ou coller du texte avec des numéros d'offres d'emploi France Travail"
+              required
+            ></textarea>
+          </div>
+          <button type="submit" class="btn btn-primary m-3">Chercher</button>
+        </form>
+      </div>
+      <div class="card bg-light shadow-sm my-3 p-3">
+        <table id="tblOffres" class="table table-striped table-hover">
+          <thead>
+            <tr>
+              <th scope="col" class="col-md-1">Numéro</th>
+              <th scope="col">Description</th>
+            </tr>
+          </thead>
+          <tbody class="table-group-divider"></tbody>
+        </table>
+      </div>
+      <div class="card bg-light shadow-sm my-3 p-3">
+        <span class="input-group-text">Le texte à publier</span>
+        <textarea
+          id="publication"
+          name="publication"
+          class="form-control"
+          style="resize: vertical; overflow-y: hidden"
+          aria-label="le texte à publier"
+          required
+        ></textarea>
+      </div>
+      <p class="fs-6">v1.3.0</p>
+    </div>
+  </body>
+</html>
