@@ -31,6 +31,7 @@ const avantagesDispo = [
   "Primes",
   "Prime de transport dès un an d'ancienneté continue dans la structure",
   "Restauration",
+  "Salaire à négocier selon compétences",
   "Titres restaurant / Prime de panier",
 ];
 const periodicite = {
