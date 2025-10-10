@@ -21,6 +21,7 @@ const avantagesDispo = [
   "Chèque repas",
   "Complémentaire santé",
   "CSE",
+  "Indemnité transports",
   "Intéressement / participation",
   "Hébergement",
   "Mutuelle",
@@ -28,6 +29,7 @@ const avantagesDispo = [
   "Paniers repas",
   "Pc portable",
   "Primes",
+  "Prime de transport dès un an d'ancienneté continue dans la structure",
   "Restauration",
   "Titres restaurant / Prime de panier",
 ];
