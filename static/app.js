@@ -195,7 +195,6 @@ const parseOffre = (body) => {
   let salaireMax = 0.0;
   let salaireDuree = 12;
   let salairePeriode = periodicite.inconnu;
-  let salaireBrut = true;
 
   const oSalaire = body.querySelector('span[itemprop="baseSalary"]')?.parentNode
     .textContent;
@@ -203,8 +202,11 @@ const parseOffre = (body) => {
     return "Salaire introuvable";
   }
 
+  const reNet = /\bnets?\b/i;
+  const salaireNet = reNet.test(oSalaire);
+
   const reSalaire =
-    /(?<n1>(?:\d{1,3}\s)?\d{2,}(?:[.,]\d{1,2})?)(?:\D+(?<n2>(?:\d{1,3}\s)?\d{2,}(?:[.,]\d{1,2})?))?(?:\D+(?<n3>\d{2,}(?:[.,]\d{1,2})?))?(?:.*(?<net>\bnet))?/i;
+    /(?<n1>(?:\d{1,3}\s)?\d{2,}(?:[.,]\d{1,2})?)(?:\D+(?<n2>(?:\d{1,3}\s)?\d{2,}(?:[.,]\d{1,2})?))?(?:\D+(?<n3>\d{2,}(?:[.,]\d{1,2})?))?/i;
   const matchSal = oSalaire.match(reSalaire);
   if (matchSal === null) {
     statut = `⚠️ salaire non renseigné - ${statut}`;
@@ -240,8 +242,6 @@ const parseOffre = (body) => {
       } else {
         statut = `⚠️ salaire mal formaté ${n1}, ${n2}, ${n3} - ${statut}`;
       }
-
-      salaireBrut = matchSal.groups.net === undefined;
 
       // Tous les salaires sont convertis en salaires mensuels
       if (salaireMin > salaireMensuelMax) {
@@ -293,7 +293,7 @@ const parseOffre = (body) => {
     salaireMax: salaireMax,
     salaireDuree: salaireDuree,
     salairePeriode: salairePeriode,
-    salaireBrut: salaireBrut,
+    salaireBrut: !salaireNet,
     entreprise: entreprise,
     pageEntreprise: pageEntreprise,
     avantages: avantages,
