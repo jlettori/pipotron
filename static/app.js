@@ -230,13 +230,13 @@ const parseOffre = (body) => {
       salaireMin = n1;
       salaireMax = n1;
 
-      if (n3 <= 0 && n2 <= 0 || n1 === n2) {
+      if (n3 <= 0 && n2 <= 0) {
         // si ça arrive, pas de problème salaireMax = salaireMin et salaireDuree = 12
       } else if (n3 <= 0 && n2 > n1) {
         salaireMax = n2;
       } else if (n3 <= 0 && n2 >= 12 && n2 <= salaireDureeMax) {
         salaireDuree = n2;
-      } else if (n2 > n1 && n3 >= 12 && n3 <= salaireDureeMax) {
+      } else if (n2 >= n1 && n3 >= 12 && n3 <= salaireDureeMax) {
         salaireMax = n2;
         salaireDuree = n3;
       } else {
