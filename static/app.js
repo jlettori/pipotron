@@ -371,26 +371,49 @@ const creerPublication = () => {
   return pubEntete + pubOffres + pubPied;
 };
 
-const form = document.getElementById("form");
-form.addEventListener("submit", (e) => {
-  e.preventDefault();
+document.addEventListener("DOMContentLoaded", () => {
+  const form = document.getElementById("form");
+  form.addEventListener("submit", (e) => {
+    e.preventDefault();
 
-  extraireNoOffres(eltTexte.value);
-  initOffres();
+    extraireNoOffres(eltTexte.value);
+    initOffres();
 
-  const promFetch = [];
-  for (const [noOffre] of offres) {
-    promFetch.push(fetchOffre(noOffre));
-  }
+    const promFetch = [];
+    for (const [noOffre] of offres) {
+      promFetch.push(fetchOffre(noOffre));
+    }
 
-  Promise.allSettled(promFetch)
-    .then(() => {
-      console.log("offres", offres);
-      const pub = creerPublication();
-      eltPublication.value = pub;
-      eltPublication.rows = pub.match(/\n/g).length + 1;
-    })
-    .catch((error) => {
-      console.log("error", error);
-    });
+    Promise.allSettled(promFetch)
+      .then(() => {
+        console.log("offres", offres);
+        const pub = creerPublication();
+        eltPublication.value = pub;
+        eltPublication.rows = pub.match(/\n/g).length + 1;
+      })
+      .catch((error) => {
+        console.log("error", error);
+      });
+  });
+
+  const copyButton = document.getElementById("btnCopyPublication");
+
+  if (!copyButton || !eltPublication) return;
+
+  copyButton.addEventListener("click", async () => {
+    const text = eltPublication.value;
+    const originalLabel = copyButton.textContent;
+
+    try {
+      await navigator.clipboard.writeText(text);
+
+      copyButton.textContent = "Copié !";
+    } catch (err) {
+      console.error("Erreur lors de la copie :", err);
+    } finally {
+      setTimeout(() => {
+        copyButton.textContent = originalLabel;
+      }, 2000);
+    }
+  });
 });

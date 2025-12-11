@@ -51,17 +51,26 @@
         </table>
       </div>
       <div class="card bg-light shadow-sm my-3 p-3">
-        <span class="input-group-text">Le texte à publier</span>
-        <textarea
-          id="publication"
-          name="publication"
-          class="form-control"
-          style="resize: vertical; overflow-y: hidden"
-          aria-label="le texte à publier"
-          required
-        ></textarea>
+        <span class="input-group-text mb-2">Le texte à publier</span>
+        <div class="d-flex gap-2">
+          <textarea
+            id="publication"
+            name="publication"
+            class="form-control flex-grow-1"
+            style="resize: vertical; overflow-y: hidden"
+            aria-label="le texte à publier"
+            required
+          ></textarea>
+          <button
+            type="button"
+            id="btnCopyPublication"
+            class="btn btn-primary align-self-start"
+          >
+            Copier le texte
+          </button>
+        </div>
       </div>
-      <p class="fs-6">v1.4.6</p>
+      <p class="fs-6">v1.5.0</p>
     </div>
   </body>
 </html>
