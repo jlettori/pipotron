@@ -19,6 +19,7 @@ const tags = [
 ];
 const avantagesDispo = [
   "Chèque repas",
+  "Commissions",
   "Complémentaire santé",
   "CSE",
   "Indemnité transports",
@@ -32,7 +33,9 @@ const avantagesDispo = [
   "Prime de transport dès un an d'ancienneté continue dans la structure",
   "Restauration",
   "Salaire à négocier selon compétences",
+  "Téléphone mobile",
   "Titres restaurant / Prime de panier",
+  "Véhicule",
 ];
 const periodicite = {
   horaire: "Horaire",
