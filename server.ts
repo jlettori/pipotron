@@ -5,19 +5,37 @@ const urlOffre =
   "https://candidat.francetravail.fr/offres/recherche/detail/${noOffre}";
 const reNoOffre = /^[1-9]\d{2}[A-Z]{4}$/i;
 
+const SEC_HEADERS = {
+  "X-Content-Type-Options": "nosniff",
+};
+
+const FETCH_TIMEOUT = 10_000;
+
 async function ProxyOffre(noOffre: string): Promise<Response> {
   if (!reNoOffre.test(noOffre)) {
-    return new Response(`'${noOffre}' n'est pas un numéro d'offre.`, {
-      status: 500,
+    return new Response("Numéro d'offre invalide.", {
+      status: 400,
+      headers: {
+        "Content-Type": "text/plain; charset=UTF-8",
+        ...SEC_HEADERS,
+      },
     });
   }
 
   try {
     const url = urlOffre.replace("${noOffre}", noOffre);
-    const response = await fetch(url);
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT);
+    const response = await fetch(url, { signal: controller.signal });
+    clearTimeout(timeout);
+
     if (!response.ok) {
-      return new Response(`Failed to fetch data. Status: ${response.status}`, {
+      return new Response(`Échec de la récupération de l'offre (${response.status}).`, {
         status: response.status,
+        headers: {
+          "Content-Type": "text/plain; charset=UTF-8",
+          ...SEC_HEADERS,
+        },
       });
     }
 
@@ -25,11 +43,17 @@ async function ProxyOffre(noOffre: string): Promise<Response> {
       headers: {
         "Content-Type": response.headers.get("Content-Type") || "text/html",
         "Access-Control-Allow-Origin": "*",
+        ...SEC_HEADERS,
       },
     });
   } catch (error) {
-    return new Response(`Error fetching data: ${error.message}`, {
-      status: 500,
+    const message = error instanceof Error ? error.message : String(error);
+    return new Response(`Erreur lors de la récupération de l'offre: ${message}`, {
+      status: 502,
+      headers: {
+        "Content-Type": "text/plain; charset=UTF-8",
+        ...SEC_HEADERS,
+      },
     });
   }
 }
@@ -54,7 +78,7 @@ const routes: Route[] = [
     pattern: new URLPattern({ pathname: "/api/offres/:noOffre" }),
     handler: (_req: Request, params) => {
       console.log("noOffre =", params?.pathname.groups.noOffre);
-      return ProxyOffre(params?.pathname.groups.noOffre);
+      return ProxyOffre(params?.pathname.groups.noOffre ?? "");
     },
   },
 ];
