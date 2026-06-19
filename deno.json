@@ -4,7 +4,7 @@
   },
   "imports": {
     "@std/assert": "jsr:@std/assert@^1.0.19",
-    "@std/http": "jsr:@std/http@^1.0.25"
+    "@std/http": "jsr:@std/http@^1.1.1"
   },
   "deploy": {
     "org": "jlettori",
