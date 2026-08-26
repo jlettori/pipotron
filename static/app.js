@@ -33,6 +33,7 @@ const avantagesDispo = [
   "Prime de transport dès un an d'ancienneté continue dans la structure",
   "Restauration",
   "Salaire à négocier selon compétences",
+  "Salaire à discuter selon compétences",
   "Téléphone mobile",
   "Titres restaurant / Prime de panier",
   "Véhicule",
