@@ -30,13 +30,16 @@ async function ProxyOffre(noOffre: string): Promise<Response> {
     clearTimeout(timeout);
 
     if (!response.ok) {
-      return new Response(`Échec de la récupération de l'offre (${response.status}).`, {
-        status: response.status,
-        headers: {
-          "Content-Type": "text/plain; charset=UTF-8",
-          ...SEC_HEADERS,
+      return new Response(
+        `Échec de la récupération de l'offre (${response.status}).`,
+        {
+          status: response.status,
+          headers: {
+            "Content-Type": "text/plain; charset=UTF-8",
+            ...SEC_HEADERS,
+          },
         },
-      });
+      );
     }
 
     return new Response(response.body, {
@@ -48,13 +51,16 @@ async function ProxyOffre(noOffre: string): Promise<Response> {
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    return new Response(`Erreur lors de la récupération de l'offre: ${message}`, {
-      status: 502,
-      headers: {
-        "Content-Type": "text/plain; charset=UTF-8",
-        ...SEC_HEADERS,
+    return new Response(
+      `Erreur lors de la récupération de l'offre: ${message}`,
+      {
+        status: 502,
+        headers: {
+          "Content-Type": "text/plain; charset=UTF-8",
+          ...SEC_HEADERS,
+        },
       },
-    });
+    );
   }
 }
 
