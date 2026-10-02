@@ -2,6 +2,8 @@ import { type Route, route } from "@std/http/unstable-route";
 import { serveDir, serveFile } from "@std/http/file-server";
 
 const urlOffre =
+  "https://candidat.francetravail.fr/api-descriptifoffre/offre/${noOffre}";
+const urlReferrer =
   "https://candidat.francetravail.fr/offres/recherche/detail/${noOffre}";
 const reNoOffre = /^[1-9]\d{2}[A-Z]{4}$/i;
 
@@ -26,7 +28,13 @@ async function ProxyOffre(noOffre: string): Promise<Response> {
     const url = urlOffre.replace("${noOffre}", noOffre);
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT);
-    const response = await fetch(url, { signal: controller.signal });
+    const response = await fetch(url, {
+      signal: controller.signal,
+      headers: {
+        Accept: "application/json",
+        Referer: urlReferrer.replace("${noOffre}", noOffre),
+      },
+    });
     clearTimeout(timeout);
 
     if (!response.ok) {

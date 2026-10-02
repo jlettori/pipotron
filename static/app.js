@@ -17,26 +17,6 @@ const tags = [
   "#carrière",
   "#rechercheemploi",
 ];
-const avantagesDispo = [
-  "Chèque repas",
-  "Commissions",
-  "Complémentaire santé",
-  "CSE",
-  "Indemnité transports",
-  "Intéressement / participation",
-  "Hébergement",
-  "Mutuelle",
-  "Ordinateur portable",
-  "Paniers repas",
-  "Pc portable",
-  "Primes",
-  "Prime de transport dès un an d'ancienneté continue dans la structure",
-  "Restauration",
-  "Salaire à discuter selon expérience",
-  "Téléphone mobile",
-  "Titres restaurant / Prime de panier",
-  "Véhicule",
-];
 const periodicite = {
   horaire: "Horaire",
   mensuel: "Mensuel",
@@ -89,31 +69,21 @@ const fetchOffre = async (noOffre) => {
     .then((response) => {
       switch (response.status) {
         case 200:
-          return response.text();
-        case 500:
+          return response.json();
+        case 404:
           return Promise.reject("Offre non disponible");
         default:
           return Promise.reject(`Erreur inconnue ${response.status})`);
       }
     })
-    .then((text) => {
-      const parser = new DOMParser();
-      const body = parser.parseFromString(text, "text/html")?.body;
-      if (body === undefined) {
-        offres.set(noOffre, {
-          ok: false,
-          statut: "⛔ Impossible de lire l'offre",
-        });
+    .then((offre) => {
+      const infos = parseOffre(offre);
+      if (typeof infos === "string") {
+        offres.set(noOffre, { ok: false, statut: `⛔ ${infos}` });
         return;
       }
 
-      const offre = parseOffre(body);
-      if (typeof offre === "string") {
-        offres.set(noOffre, { ok: false, statut: `⛔ ${offre}` });
-        return;
-      }
-
-      offres.set(noOffre, offre);
+      offres.set(noOffre, infos);
       nbOffres++;
     })
     .catch((error) => {
@@ -128,69 +98,68 @@ const StatutOffre = (noOffre) => {
   elt.innerText = offres.get(noOffre).statut;
 };
 
-// parseOffre lit les informations de l'offre.
-const parseOffre = (body) => {
-  const oTitre = body.querySelector('span[itemprop="title"]')?.innerText;
-  if (oTitre === undefined) {
+// parseOffre lit les informations de l'offre renvoyées par l'API.
+const parseOffre = (offre) => {
+  const oTitre = offre.intituleOffre;
+  if (oTitre === undefined || oTitre === null) {
     return "Titre introuvable";
   }
 
   const titre = oTitre.replace(/\s*\(?\s*H\s*\/\s*F\s*\)?/gi, "") + " (H/F)";
 
-  const oDescription = body.querySelector('div[itemprop="description"]')
-    ?.innerText;
-  if (oDescription === undefined) {
+  const oDescription = offre.descriptif;
+  if (oDescription === undefined || oDescription === null) {
     return "Description introuvable";
   }
 
-  const oLieu = body.querySelector('span[itemprop="name"]')?.innerText;
-  if (oLieu === undefined) {
+  const oLieu = offre.lieuTravail;
+  if (oLieu === undefined || oLieu === null) {
     return "Lieu introuvable";
   }
 
-  const pos = oLieu.indexOf("-");
-  const departement = pos === -1 ? "" : oLieu.substring(0, pos).trim();
-  const lieu = pos === -1 ? oLieu : oLieu.substring(pos + 1).trim();
+  // le lieu est du type "L ILE ROUSSE (2B)" ou "2B - L ILE ROUSSE"
+  const matchLieu = oLieu.match(/\(([^()]+)\)\s*$/);
+  let departement = "";
+  let lieu = oLieu.trim();
+  if (matchLieu !== null) {
+    departement = matchLieu[1].trim();
+    lieu = oLieu.substring(0, matchLieu.index).trim();
+  } else {
+    const pos = lieu.indexOf("-");
+    if (pos !== -1) {
+      departement = lieu.substring(0, pos).trim();
+      lieu = lieu.substring(pos + 1).trim();
+    }
+  }
 
-  const oContrat = body.querySelector('span[title="Type de contrat"]')
-    ?.parentNode.nextSibling.childNodes[0].nodeValue;
-  if (oContrat === undefined) {
+  // syntheseContrat est du type "CDI - Contrat travail"
+  const oContrat = offre.syntheseContrat;
+  if (oContrat === undefined || oContrat === null) {
     return "Type de contrat introuvable";
   }
 
-  const contrat = oContrat.replaceAll("\n", "")
-    .replace("Contrat à durée déterminée -", "CDD")
-    .replace("Contrat à durée indéterminée", "CDI")
-    .replace("Contrat travail saisonnier -", "contrat saisonnier");
+  const contrat = oContrat.split("-")[0].trim();
 
-  const oHoraireHebdo = body.querySelector('span[itemprop="employmentType"]')
-    ?.nextSibling.textContent;
-  if (oHoraireHebdo === undefined) {
-    return "Horaire hebdo introuvable";
-  }
+  // listeLibelleTypeHoraire contient par exemple
+  // ["Temps partiel - 18H/semaine", "Travail de nuit"]
+  const libellesHoraire =
+    offre.conditionTravailPoste?.listeLibelleTypeHoraire ??
+      [];
 
-  const reHoraireHebdo = /(?<hh>\d{1,2})h/i;
-  const matchHoraire = oHoraireHebdo.match(reHoraireHebdo);
-  if (matchHoraire === null) {
-    return "Format horaire introuvable";
-  }
+  const reHoraireHebdo = /(?<hh>\d{1,2})\s*h/i;
+  const matchHoraire = libellesHoraire.join(" - ").match(reHoraireHebdo);
 
-  const horaireHebdo =
-    parseFloat(matchHoraire.groups.hh?.replaceAll(",", ".")) ||
-    horaireHebdoDefaut;
+  const horaireHebdo = parseFloat(
+    matchHoraire?.groups.hh?.replaceAll(",", "."),
+  ) || horaireHebdoDefaut;
 
-  const entreprise = body.querySelector(
-    'span[itemprop="hiringOrganization"]>span[itemprop="name"]',
-  )
-    ?.getAttribute("content") || "";
+  const entreprise = offre.descriptionEntreprise ||
+    offre.etablissement?.libelleEnseigne ||
+    "";
 
-  const pageEntreprise =
-    body.querySelector("div.media-body>p>a")?.getAttribute("href") || "";
-
-  const dateDebut = body.querySelector('span[itemprop="datePosted"]')
-    ?.getAttribute("content");
-  const dateFin = body.querySelector('span[itemprop="validThrough"]')
-    ?.getAttribute("content");
+  const pageEntreprise = offre.etablissement?.urlEntreprise ||
+    offre.pageEmployeurUrl ||
+    "";
 
   const avantages = [];
   let statut = `${titre} à ${lieu}`;
@@ -199,20 +168,17 @@ const parseOffre = (body) => {
   let salaireDuree = 12;
   let salairePeriode = periodicite.inconnu;
 
-  const oSalaire = body.querySelector('span[itemprop="baseSalary"]')?.parentNode
-    .textContent;
-  if (oSalaire === undefined) {
-    return "Salaire introuvable";
-  }
-
+  const oSalaire = offre.salaire;
   const reNet = /\bnets?\b/i;
-  const salaireNet = reNet.test(oSalaire);
+  const salaireNet = reNet.test(oSalaire ?? "");
 
   const reSalaire =
     /(?<n1>(?:\d{1,3}\s)?\d{2,}(?:[.,]\d{1,2})?)(?:\D+(?<n2>(?:\d{1,3}\s)?\d{2,}(?:[.,]\d{1,2})?))?(?:\D+(?<n3>\d{2,}(?:[.,]\d{1,2})?))?/i;
-  const matchSal = oSalaire.match(reSalaire);
-  if (matchSal === null) {
+  const matchSal = oSalaire?.match(reSalaire);
+  if (oSalaire === undefined || oSalaire === null) {
     statut = `⚠️ salaire non renseigné - ${statut}`;
+  } else if (matchSal === null) {
+    statut = `⚠️ salaire non identifié - ${statut}`;
   } else {
     const n1 = parseFloat(
       matchSal.groups.n1?.replaceAll(",", ".").replaceAll(" ", ""),
@@ -271,16 +237,13 @@ const parseOffre = (body) => {
     }
   }
 
-  const debutant = body.querySelector('span[itemprop="experienceRequirements"]')
-    ?.innerText;
+  const debutant = offre.experienceProfil?.experience;
   if (debutant === "Débutant accepté") {
     avantages.push("débutant(e) accepté(e)");
   }
 
-  for (const avantage of avantagesDispo) {
-    if (oSalaire.includes(avantage)) {
-      avantages.push(avantage);
-    }
+  for (const avantage of offre.listeAvantages ?? []) {
+    avantages.push(avantage);
   }
 
   return {
@@ -301,8 +264,7 @@ const parseOffre = (body) => {
     pageEntreprise: pageEntreprise,
     avantages: avantages,
     debutant: debutant,
-    dateDebut: dateDebut,
-    dateFin: dateFin,
+    dateDerniereModification: offre.dateDerniereModification,
   };
 };
 
