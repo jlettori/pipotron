@@ -153,8 +153,7 @@ const parseOffre = (offre) => {
     matchHoraire?.groups.hh?.replaceAll(",", "."),
   ) || horaireHebdoDefaut;
 
-  const entreprise = offre.descriptionEntreprise ||
-    offre.etablissement?.libelleEnseigne ||
+  const entreprise = offre.etablissement?.libelleEnseigne ||
     "";
 
   const pageEntreprise = offre.etablissement?.urlEntreprise ||
