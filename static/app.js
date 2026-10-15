@@ -153,8 +153,10 @@ const parseOffre = (offre) => {
     matchHoraire?.groups.hh?.replaceAll(",", "."),
   ) || horaireHebdoDefaut;
 
-  const entreprise = offre.etablissement?.libelleEnseigne ||
-    "";
+  let entreprise = "";
+  if (offre.codeTypeAffichageCoordonneesRecruteur !== "A") {
+    entreprise = offre.etablissement?.libelleEnseigne || "";
+  }
 
   const pageEntreprise = offre.etablissement?.urlEntreprise ||
     offre.pageEmployeurUrl ||
