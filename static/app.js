@@ -113,24 +113,12 @@ const parseOffre = (offre) => {
   }
 
   const oLieu = offre.lieuTravail;
+
   if (oLieu === undefined || oLieu === null) {
     return "Lieu introuvable";
   }
 
-  // le lieu est du type "L ILE ROUSSE (2B)" ou "2B - L ILE ROUSSE"
-  const matchLieu = oLieu.match(/\(([^()]+)\)\s*$/);
-  let departement = "";
-  let lieu = oLieu.trim();
-  if (matchLieu !== null) {
-    departement = matchLieu[1].trim();
-    lieu = oLieu.substring(0, matchLieu.index).trim();
-  } else {
-    const pos = lieu.indexOf("-");
-    if (pos !== -1) {
-      departement = lieu.substring(0, pos).trim();
-      lieu = lieu.substring(pos + 1).trim();
-    }
-  }
+  const lieu = oLieu.libelleCommuneLieuTravail?.trim();
 
   // syntheseContrat est du type "CDI - Contrat travail"
   const oContrat = offre.syntheseContrat;
@@ -254,7 +242,6 @@ const parseOffre = (offre) => {
     description: oDescription,
     contrat: contrat,
     horaireHebdo: horaireHebdo,
-    departement: departement,
     lieu: lieu,
     salaireMin: salaireMin,
     salaireMax: salaireMax,
