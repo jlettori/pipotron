@@ -118,7 +118,9 @@ const parseOffre = (offre) => {
     return "Lieu introuvable";
   }
 
-  const lieu = oLieu.libelleCommuneLieuTravail?.trim();
+  const lieu = oLieu.libelleCommuneLieuTravail || oLieu.libelleLieuTravail ||
+    "";
+  const lieuAEn = oLieu.libelleCommuneLieuTravail === "" ? " en " : " à ";
 
   // syntheseContrat est du type "CDI - Contrat travail"
   const oContrat = offre.syntheseContrat;
@@ -151,7 +153,7 @@ const parseOffre = (offre) => {
     "";
 
   const avantages = [];
-  let statut = `${titre} à ${lieu}`;
+  let statut = `${titre}${lieuAEn}${lieu}`;
   let salaireMin = 0.0;
   let salaireMax = 0.0;
   let salaireDuree = 12;
@@ -242,6 +244,7 @@ const parseOffre = (offre) => {
     description: oDescription,
     contrat: contrat,
     horaireHebdo: horaireHebdo,
+    lieuAEn: lieuAEn,
     lieu: lieu,
     salaireMin: salaireMin,
     salaireMax: salaireMax,
@@ -259,6 +262,7 @@ const parseOffre = (offre) => {
 // creerPublication crée le texte de la publication à partir des offres.
 const creerPublication = () => {
   const lieux = [];
+  let lieuAEn = "";
   let entreprise = "";
   let pageEntreprise = "";
   let pubOffres = "";
@@ -270,6 +274,9 @@ const creerPublication = () => {
     auMoinsUneOffre = true;
 
     if (lieux.indexOf(offre.lieu) === -1) {
+      if (lieuAEn === "") {
+        lieuAEn = offre.lieuAEn;
+      }
       lieux.push(offre.lieu);
     }
 
@@ -313,8 +320,8 @@ const creerPublication = () => {
 
   pubPied += tags.sort(() => 0.5 - Math.random()).slice(0, 3).join(" ");
 
-  let pubEntete = "OFFRE" + (nbOffres === 1 ? "" : "S") + " D'EMPLOI à " +
-    lieux.sort().join(", ");
+  let pubEntete = "OFFRE" + (nbOffres === 1 ? "" : "S") + " D'EMPLOI" +
+    lieuAEn + lieux.sort().join(", ");
   if (entreprise !== "") {
     pubEntete += ` pour ${entreprise}`;
   }
