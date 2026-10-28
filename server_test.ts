@@ -1,4 +1,4 @@
-import { assertEquals } from "jsr:@std/assert@^1.0.19";
+import { assertEquals } from "@std/assert";
 import { calculerSalaireNetUrssaf } from "./server.ts";
 
 Deno.test("calculerSalaireNetUrssaf: invalid or missing salaireBrut returns 400", async () => {

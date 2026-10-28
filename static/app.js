@@ -1,5 +1,26 @@
 const lienOffre = "candidat.francetravail.fr/offres/recherche/detail/";
 const apiOffre = "/api/offres/${noOffre}";
+const apiSalaireNet = "/api/salaire-net/${salaireBrut}/${estCadre}";
+
+// calculerSalaireNet calcule le salaire net mensuel via l'API serveur.
+const calculerSalaireNet = async (salaireBrut, estCadre) => {
+  const url = apiSalaireNet
+    .replace("${salaireBrut}", encodeURIComponent(salaireBrut))
+    .replace("${estCadre}", encodeURIComponent(estCadre));
+  const response = await fetch(url);
+  if (response && typeof response.ok === "boolean" && !response.ok) {
+    throw new Error(`Erreur HTTP ${response.status}`);
+  }
+  const data = typeof response?.json === "function"
+    ? await response.json()
+    : response;
+  return data?.salaireNet;
+};
+
+// Expose la fonction pour les tests et autres consommateurs.
+if (typeof globalThis !== "undefined") {
+  globalThis.calculerSalaireNet = calculerSalaireNet;
+}
 
 const eltTblOffres = document.getElementById("tblOffres");
 const eltTexte = document.getElementById("texte");
@@ -76,8 +97,8 @@ const fetchOffre = async (noOffre) => {
           return Promise.reject(`Erreur inconnue ${response.status})`);
       }
     })
-    .then((offre) => {
-      const infos = parseOffre(offre);
+    .then(async (offre) => {
+      const infos = await parseOffre(offre);
       if (typeof infos === "string") {
         offres.set(noOffre, { ok: false, statut: `⛔ ${infos}` });
         return;
@@ -99,7 +120,7 @@ const StatutOffre = (noOffre) => {
 };
 
 // parseOffre lit les informations de l'offre renvoyées par l'API.
-const parseOffre = (offre) => {
+const parseOffre = async (offre) => {
   const oTitre = offre.intituleOffre;
   if (oTitre === undefined || oTitre === null) {
     return "Titre introuvable";
@@ -128,7 +149,7 @@ const parseOffre = (offre) => {
     return "Type de contrat introuvable";
   }
 
-  const contrat = oContrat.split("-")[0].trim();
+  const contrat = oContrat.substring(0, oContrat.lastIndexOf(" - "));
 
   // listeLibelleTypeHoraire contient par exemple
   // ["Temps partiel - 18H/semaine", "Travail de nuit"]
@@ -156,12 +177,15 @@ const parseOffre = (offre) => {
   let statut = `${titre}${lieuAEn}${lieu}`;
   let salaireMin = 0.0;
   let salaireMax = 0.0;
+  let salaireNetMin = 0.0;
+  let salaireNetMax = 0.0;
   let salaireDuree = 12;
   let salairePeriode = periodicite.inconnu;
 
   const oSalaire = offre.salaire;
   const reNet = /\bnets?\b/i;
-  const salaireNet = reNet.test(oSalaire ?? "");
+  const estSalaireBrut = !reNet.test(oSalaire ?? "");
+  const estCadre = offre.qualification === "cadre";
 
   const reSalaire =
     /(?<n1>(?:\d{1,3}\s)?\d{2,}(?:[.,]\d{1,2})?)(?:\D+(?<n2>(?:\d{1,3}\s)?\d{2,}(?:[.,]\d{1,2})?))?(?:\D+(?<n3>\d{2,}(?:[.,]\d{1,2})?))?/i;
@@ -220,6 +244,11 @@ const parseOffre = (offre) => {
       salaireMin = Math.ceil(salaireMin);
       salaireMax = Math.ceil(salaireMax);
 
+      if (estSalaireBrut) {
+        salaireNetMin = await calculerSalaireNet(salaireMin, estCadre);
+        salaireNetMax = await calculerSalaireNet(salaireMax, estCadre);
+      }
+
       if (salaireDuree > salaireDureeMax) {
         statut = `⚠️ salaire sur ${salaireDuree} mois incorrect - ${statut}`;
       } else if (salaireDuree > 12 && salaireDuree <= salaireDureeMax) {
@@ -248,9 +277,11 @@ const parseOffre = (offre) => {
     lieu: lieu,
     salaireMin: salaireMin,
     salaireMax: salaireMax,
+    salaireNetMin: salaireNetMin,
+    salaireNetMax: salaireNetMax,
     salaireDuree: salaireDuree,
     salairePeriode: salairePeriode,
-    salaireBrut: !salaireNet,
+    estSalaireBrut: estSalaireBrut,
     entreprise: entreprise,
     pageEntreprise: pageEntreprise,
     avantages: avantages,
@@ -267,6 +298,7 @@ const creerPublication = () => {
   let pageEntreprise = "";
   let pubOffres = "";
   let auMoinsUneOffre = false;
+  let auMoinsUnSalaireBrut = false;
 
   for (const [noOffre, offre] of offres) {
     if (!offre.ok) continue;
@@ -289,12 +321,25 @@ const creerPublication = () => {
       `${offre.titre} 📜 ${offre.contrat} ⌛ ${offre.horaireHebdo}h / semaine`;
 
     if (offre.salaireMin !== 0) {
-      pubOffres += ` 💰 ${offre.salaireMin}€`;
-      if (offre.salaireMax - offre.salaireMin > 10) {
-        pubOffres += ` à ${offre.salaireMax}€`;
-      }
+      if (offre.estSalaireBrut) {
+        auMoinsUnSalaireBrut = true;
+        pubOffres += ` 💰 ${offre.salaireMin}€`;
+        if (offre.salaireMax - offre.salaireMin > 10) {
+          pubOffres += ` à ${offre.salaireMax}€`;
+        }
 
-      pubOffres += (offre.salaireBrut ? " BRUT" : " NET") + " / mois";
+        pubOffres += ` BRUT / mois (💶 ${offre.salaireNetMin}€`;
+        if (offre.salaireMax - offre.salaireMin > 10) {
+          pubOffres += ` à ${offre.salaireNetMax}€`;
+        }
+        pubOffres += " NET / mois¹)";
+      } else {
+        pubOffres += ` 💰 ${offre.salaireMin}€`;
+        if (offre.salaireMax - offre.salaireMin > 10) {
+          pubOffres += ` à ${offre.salaireMax}€`;
+        }
+        pubOffres += " NET / mois";
+      }
     }
 
     if (offre.avantages.length !== 0) {
@@ -315,7 +360,10 @@ const creerPublication = () => {
   let pubPied = "";
   if (pageEntreprise !== "") {
     pubPied =
-      `Pour découvrir l'entreprise et toutes ses offres d'emploi 👉 ${pageEntreprise} \n\n`;
+      `Pour découvrir l'entreprise et toutes ses offres d'emploi 👉 ${pageEntreprise}\n`;
+  }
+  if (auMoinsUnSalaireBrut) {
+    pubPied += `\n\¹Le salaire NET est donné à titre indicatif.\n`;
   }
 
   pubPied += tags.sort(() => 0.5 - Math.random()).slice(0, 3).join(" ");
@@ -331,6 +379,7 @@ const creerPublication = () => {
   return pubEntete + pubOffres + pubPied;
 };
 
+// main
 document.addEventListener("DOMContentLoaded", () => {
   const form = document.getElementById("form");
   form.addEventListener("submit", (e) => {
