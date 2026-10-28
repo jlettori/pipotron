@@ -72,6 +72,103 @@ async function ProxyOffre(noOffre: string): Promise<Response> {
   }
 }
 
+/**
+ * Calcule le salaire net exact via l'API officielle de l'Urssaf.
+ *
+ * @param {number} salaireBrut - Montant du salaire brut mensuel.
+ * @param {boolean} [estCadre=non] - Indique si le salarié a le statut cadre.
+ * @returns {Promise<number>} Le salaire net mensuel avant impôt.
+ */
+export async function calculerSalaireNetUrssaf(
+  salaireBrutRaw: string | null = null,
+  estCadreRaw: string | null = null,
+): Promise<Response> {
+  const salaireBrut = Number(salaireBrutRaw);
+  const estCadre = estCadreRaw === "true" || estCadreRaw === "1" ||
+    estCadreRaw === "oui";
+
+  if (salaireBrutRaw === null || isNaN(salaireBrut)) {
+    return new Response(
+      JSON.stringify({ error: "Paramètre salaireBrut invalide ou manquant." }),
+      {
+        status: 400,
+        headers: {
+          "Content-Type": "application/json; charset=UTF-8",
+          ...SEC_HEADERS,
+        },
+      },
+    );
+  }
+
+  if (salaireBrut <= 0) {
+    return new Response(
+      JSON.stringify({ salaireBrut, estCadre, salaireNet: 0.0 }),
+      {
+        headers: {
+          "Content-Type": "application/json; charset=UTF-8",
+          ...SEC_HEADERS,
+        },
+      },
+    );
+  }
+
+  const url = "https://mon-entreprise.urssaf.fr/api/v1/evaluate";
+
+  const payload = {
+    expressions: [
+      "salarié . rémunération . net . à payer avant impôt",
+    ],
+    situation: {
+      "salarié . rémunération . brut": `${salaireBrut} €/mois`,
+      "salarié . contrat . statut cadre": estCadre ? "oui" : "non",
+    },
+  };
+
+  try {
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Erreur HTTP : ${response.status}`);
+    }
+
+    const data = await response.json();
+
+    // Extraction de la valeur numérique retournée par l'API
+    const resultat = data.evaluate[0].nodeValue;
+    const salaireNet = Math.round(resultat * 100) / 100;
+
+    return new Response(
+      JSON.stringify({ salaireBrut, estCadre, salaireNet }),
+      {
+        headers: {
+          "Content-Type": "application/json; charset=UTF-8",
+          ...SEC_HEADERS,
+        },
+      },
+    );
+  } catch (error) {
+    console.error("Impossible de joindre l'API Urssaf :", error);
+    return new Response(
+      JSON.stringify({
+        error: "Impossible de calculer le salaire net via l'API Urssaf.",
+      }),
+      {
+        status: 502,
+        headers: {
+          "Content-Type": "application/json; charset=UTF-8",
+          ...SEC_HEADERS,
+        },
+      },
+    );
+  }
+}
+
 const routes: Route[] = [
   {
     method: ["GET"],
@@ -95,10 +192,26 @@ const routes: Route[] = [
       return ProxyOffre(params?.pathname.groups.noOffre ?? "");
     },
   },
+  {
+    method: ["GET"],
+    pattern: new URLPattern({
+      pathname: "/api/salaire-net/:salaireBrut?/:estCadre?",
+    }),
+    handler: (req: Request, params) => {
+      const url = new URL(req.url);
+      const groups = params?.pathname.groups ?? {};
+      return calculerSalaireNetUrssaf(
+        groups.salaireBrut ?? url.searchParams.get("salaireBrut"),
+        groups.estCadre ?? url.searchParams.get("estCadre"),
+      );
+    },
+  },
 ];
 
 function defaultHandler(req: Request) {
   return new Response(`Page non trouvée ${req.url}`, { status: 404 });
 }
 
-Deno.serve(route(routes, defaultHandler));
+if (import.meta.main) {
+  Deno.serve(route(routes, defaultHandler));
+}
