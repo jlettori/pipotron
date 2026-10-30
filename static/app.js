@@ -126,7 +126,8 @@ const parseOffre = async (offre) => {
     return "Titre introuvable";
   }
 
-  const titre = oTitre.replace(/\s*\(?\s*H\s*\/\s*F\s*\)?/gi, "") + " (H/F)";
+  const titre = oTitre.replace(/\s*\(?\s*[HF]\s*\/\s*[HF]\s*\)?/gi, "") +
+    " (H/F)";
 
   const oDescription = offre.descriptif;
   if (oDescription === undefined || oDescription === null) {
@@ -317,7 +318,7 @@ const creerPublication = () => {
       pageEntreprise = offre.pageEntreprise;
     }
 
-    pubOffres += (nbOffres === 1 ? "" : "🔹 ") +
+    pubOffres += (nbOffres === 1 ? "" : "\n🔹 ") +
       `${offre.titre} 📜 ${offre.contrat} ⌛ ${offre.horaireHebdo}h / semaine`;
 
     if (offre.salaireMin !== 0) {
@@ -350,23 +351,23 @@ const creerPublication = () => {
       pubOffres += ".\nPour plus d'informations et pour postuler";
     }
 
-    pubOffres += ` 👉 ${lienOffre}${noOffre}\n\n`;
+    pubOffres += ` 👉 ${lienOffre}${noOffre}\n`;
   }
 
   if (!auMoinsUneOffre) {
     return "Aucune offre disponible";
   }
 
-  let pubPied = "";
+  let pubPied = "\n";
   if (pageEntreprise !== "") {
     pubPied =
-      `Pour découvrir l'entreprise et toutes ses offres d'emploi 👉 ${pageEntreprise}\n`;
+      `\nPour découvrir l'entreprise et toutes ses offres d'emploi 👉 ${pageEntreprise}`;
   }
   if (auMoinsUnSalaireBrut) {
-    pubPied += `\n\¹Le salaire NET est donné à titre indicatif.\n`;
+    pubPied += `\n\¹Le salaire NET est donné à titre indicatif.`;
   }
 
-  pubPied += tags.sort(() => 0.5 - Math.random()).slice(0, 3).join(" ");
+  pubPied += "\n" + tags.sort(() => 0.5 - Math.random()).slice(0, 3).join(" ");
 
   let pubEntete = "OFFRE" + (nbOffres === 1 ? "" : "S") + " D'EMPLOI" +
     lieuAEn + lieux.sort().join(", ");
@@ -374,7 +375,7 @@ const creerPublication = () => {
     pubEntete += ` pour ${entreprise}`;
   }
 
-  pubEntete += " : " + (nbOffres === 1 ? "" : "\n");
+  pubEntete += " : ";
 
   return pubEntete + pubOffres + pubPied;
 };
