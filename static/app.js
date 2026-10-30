@@ -14,7 +14,7 @@ const calculerSalaireNet = async (salaireBrut, estCadre) => {
   const data = typeof response?.json === "function"
     ? await response.json()
     : response;
-  return data?.salaireNet;
+  return Math.ceil(data?.salaireNet);
 };
 
 // Expose la fonction pour les tests et autres consommateurs.
