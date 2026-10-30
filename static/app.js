@@ -334,7 +334,7 @@ const creerPublication = () => {
         }
         pubOffres += " NET / mois¹)";
       } else {
-        pubOffres += ` 💰 ${offre.salaireMin}€`;
+        pubOffres += ` 💶 ${offre.salaireMin}€`;
         if (offre.salaireMax - offre.salaireMin > 10) {
           pubOffres += ` à ${offre.salaireMax}€`;
         }
