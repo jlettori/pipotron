@@ -1,26 +1,28 @@
 const lienOffre = "candidat.francetravail.fr/offres/recherche/detail/";
-const apiOffre = "/api/offres/${noOffre}";
-const apiSalaireNet = "/api/salaire-net/${salaireBrut}/${estCadre}";
+const urlOffre = (noOffre) => `/api/offres/${encodeURIComponent(noOffre)}`;
+const urlSalaireNet = (salaireBrut, estCadre) => {
+  const brut = encodeURIComponent(salaireBrut);
+  const cadre = encodeURIComponent(estCadre);
+  return `/api/salaire-net/${brut}/${cadre}`;
+};
 
 // calculerSalaireNet calcule le salaire net mensuel via l'API serveur.
 const calculerSalaireNet = async (salaireBrut, estCadre) => {
-  const url = apiSalaireNet
-    .replace("${salaireBrut}", encodeURIComponent(salaireBrut))
-    .replace("${estCadre}", encodeURIComponent(estCadre));
-  const response = await fetch(url);
-  if (response && typeof response.ok === "boolean" && !response.ok) {
+  const response = await fetch(urlSalaireNet(salaireBrut, estCadre));
+  if (!response.ok) {
     throw new Error(`Erreur HTTP ${response.status}`);
   }
-  const data = typeof response?.json === "function"
-    ? await response.json()
-    : response;
-  return Math.ceil(data?.salaireNet);
+
+  const { salaireNet } = await response.json();
+  if (!Number.isFinite(salaireNet)) {
+    throw new Error("Salaire net invalide");
+  }
+
+  return Math.ceil(salaireNet);
 };
 
 // Expose la fonction pour les tests et autres consommateurs.
-if (typeof globalThis !== "undefined") {
-  globalThis.calculerSalaireNet = calculerSalaireNet;
-}
+globalThis.calculerSalaireNet = calculerSalaireNet;
 
 const eltTblOffres = document.getElementById("tblOffres");
 const eltTexte = document.getElementById("texte");
@@ -46,34 +48,44 @@ const periodicite = {
 };
 
 const offres = new Map();
-let nbOffres = 0;
 
 const salaireHoraireMax = 100;
 const salaireMensuelMax = 10000;
 const salaireDureeMax = 14;
 const horaireHebdoDefaut = 35;
+const semainesParMois = 52 / 12;
+
+const reNoOffre = /[1-9]\d{2}[A-Z]{4}/gi;
+const reGenre = /\s*\(?\s*[HF]\s*\/\s*[HF]\s*\)?/gi;
+const reNet = /\bnets?\b/i;
+const reHoraireHebdo = /(?<hh>\d{1,2})\s*h/i;
+const reSalaire =
+  /(?<n1>(?:\d{1,3}\s)?\d{2,}(?:[.,]\d{1,2})?)(?:\D+(?<n2>(?:\d{1,3}\s)?\d{2,}(?:[.,]\d{1,2})?))?(?:\D+(?<n3>\d{2,}(?:[.,]\d{1,2})?))?/i;
+
+const estRenseigne = (valeur) => valeur !== undefined && valeur !== null;
+
+const parseNombre = (valeur) => {
+  const texte = String(valeur ?? "")
+    .replaceAll(",", ".")
+    .replaceAll(/\s/g, "");
+  const nombre = Number.parseFloat(texte);
+  return Number.isFinite(nombre) ? nombre : 0;
+};
 
 // extraireNoOffres extrait les numéros d'offre du texte.
 const extraireNoOffres = (texte) => {
-  const reOffre = /[1-9]\d{2}[A-Z]{4}/gi;
-  const noOffres = texte.match(reOffre);
-
   offres.clear();
-  for (const noOffre of noOffres) {
+  for (const noOffre of texte.match(reNoOffre) ?? []) {
     offres.set(noOffre.toUpperCase(), null);
   }
 };
 
 // initOffres initialise les offres.
 const initOffres = () => {
-  nbOffres = 0;
-
   const tbody = eltTblOffres.querySelector("tbody");
-  while (tbody.firstChild) {
-    tbody.firstChild.remove();
-  }
+  tbody.replaceChildren();
 
-  for (const [noOffre] of offres) {
+  for (const noOffre of offres.keys()) {
     const newRow = tbody.insertRow();
     newRow.innerHTML = `
         <th scope="row">
@@ -83,92 +95,81 @@ const initOffres = () => {
   }
 };
 
-// fetchOffre récupère l'offre sur francetravail.fr.
-const fetchOffre = async (noOffre) => {
-  const urlOffre = apiOffre.replace("${noOffre}", noOffre);
-  await fetch(urlOffre, {})
-    .then((response) => {
-      switch (response.status) {
-        case 200:
-          return response.json();
-        case 404:
-          return Promise.reject("Offre non disponible");
-        default:
-          return Promise.reject(`Erreur inconnue ${response.status})`);
-      }
-    })
-    .then(async (offre) => {
-      const infos = await parseOffre(offre);
-      if (typeof infos === "string") {
-        offres.set(noOffre, { ok: false, statut: `⛔ ${infos}` });
-        return;
-      }
-
-      offres.set(noOffre, infos);
-      nbOffres++;
-    })
-    .catch((error) => {
-      offres.set(noOffre, { ok: false, statut: `⛔ ${error}` });
-    });
-
-  StatutOffre(noOffre);
+const afficherStatutOffre = (noOffre) => {
+  const elt = document.getElementById(`statut${noOffre}`);
+  const statut = offres.get(noOffre)?.statut;
+  if (elt && statut !== undefined) {
+    elt.textContent = statut;
+  }
 };
 
-const StatutOffre = (noOffre) => {
-  const elt = document.getElementById(`statut${noOffre}`);
-  elt.innerText = offres.get(noOffre).statut;
+// fetchOffre récupère l'offre sur francetravail.fr.
+const fetchOffre = async (noOffre) => {
+  try {
+    const response = await fetch(urlOffre(noOffre));
+
+    if (response.status === 404) {
+      throw new Error("Offre non disponible");
+    }
+    if (!response.ok) {
+      throw new Error(`Erreur HTTP ${response.status}`);
+    }
+
+    const infos = await parseOffre(await response.json());
+    offres.set(
+      noOffre,
+      typeof infos === "string" ? { ok: false, statut: `⛔ ${infos}` } : infos,
+    );
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    offres.set(noOffre, { ok: false, statut: `⛔ ${message}` });
+  } finally {
+    afficherStatutOffre(noOffre);
+  }
 };
 
 // parseOffre lit les informations de l'offre renvoyées par l'API.
 const parseOffre = async (offre) => {
-  const oTitre = offre.intituleOffre;
-  if (oTitre === undefined || oTitre === null) {
+  if (!estRenseigne(offre.intituleOffre)) {
     return "Titre introuvable";
   }
+  const titre = `${offre.intituleOffre.replace(reGenre, "").trim()} (H/F)`;
 
-  const titre = oTitre.replace(/\s*\(?\s*[HF]\s*\/\s*[HF]\s*\)?/gi, "") +
-    " (H/F)";
-
-  const oDescription = offre.descriptif;
-  if (oDescription === undefined || oDescription === null) {
+  if (!estRenseigne(offre.descriptif)) {
     return "Description introuvable";
   }
+  const description = offre.descriptif;
 
   const oLieu = offre.lieuTravail;
-
-  if (oLieu === undefined || oLieu === null) {
+  if (!estRenseigne(oLieu)) {
     return "Lieu introuvable";
   }
+  const commune = oLieu.libelleCommuneLieuTravail;
+  const lieu = commune || oLieu.libelleLieuTravail || "";
+  const lieuAEn = commune ? " à " : " en ";
 
-  const lieu = oLieu.libelleCommuneLieuTravail || oLieu.libelleLieuTravail ||
-    "";
-  const lieuAEn = oLieu.libelleCommuneLieuTravail === "" ? " en " : " à ";
-
-  // syntheseContrat est du type "CDI - Contrat travail"
+  // syntheseContrat est du type "CDI - Contrat travail".
   const oContrat = offre.syntheseContrat;
-  if (oContrat === undefined || oContrat === null) {
+  if (!estRenseigne(oContrat)) {
     return "Type de contrat introuvable";
   }
-
-  const contrat = oContrat.substring(0, oContrat.lastIndexOf(" - "));
+  const separateurContrat = oContrat.lastIndexOf(" - ");
+  const contrat = separateurContrat === -1
+    ? oContrat
+    : oContrat.slice(0, separateurContrat);
 
   // listeLibelleTypeHoraire contient par exemple
-  // ["Temps partiel - 18H/semaine", "Travail de nuit"]
+  // ["Temps partiel - 18H/semaine", "Travail de nuit"].
   const libellesHoraire =
     offre.conditionTravailPoste?.listeLibelleTypeHoraire ??
       [];
-
-  const reHoraireHebdo = /(?<hh>\d{1,2})\s*h/i;
   const matchHoraire = libellesHoraire.join(" - ").match(reHoraireHebdo);
+  const horaireHebdo = parseNombre(matchHoraire?.groups?.hh) ||
+    horaireHebdoDefaut;
 
-  const horaireHebdo = parseFloat(
-    matchHoraire?.groups.hh?.replaceAll(",", "."),
-  ) || horaireHebdoDefaut;
-
-  let entreprise = "";
-  if (offre.codeTypeAffichageCoordonneesRecruteur !== "A") {
-    entreprise = offre.etablissement?.libelleEnseigne || "";
-  }
+  const entreprise = offre.codeTypeAffichageCoordonneesRecruteur !== "A"
+    ? offre.etablissement?.libelleEnseigne || ""
+    : "";
 
   const pageEntreprise = offre.etablissement?.urlEntreprise ||
     offre.pageEmployeurUrl ||
@@ -176,38 +177,26 @@ const parseOffre = async (offre) => {
 
   const avantages = [];
   let statut = `${titre}${lieuAEn}${lieu}`;
-  let salaireMin = 0.0;
-  let salaireMax = 0.0;
-  let salaireNetMin = 0.0;
-  let salaireNetMax = 0.0;
+  let salaireMin = 0;
+  let salaireMax = 0;
+  let salaireNetMin = 0;
+  let salaireNetMax = 0;
   let salaireDuree = 12;
   let salairePeriode = periodicite.inconnu;
 
   const oSalaire = offre.salaire;
-  const reNet = /\bnets?\b/i;
-  const estSalaireBrut = !reNet.test(oSalaire ?? "");
-  const estCadre = offre.qualification === "cadre";
+  const estSalaireBrut = !reNet.test(String(oSalaire ?? ""));
+  const estCadre = String(offre.qualification ?? "").toLowerCase() === "cadre";
 
-  const reSalaire =
-    /(?<n1>(?:\d{1,3}\s)?\d{2,}(?:[.,]\d{1,2})?)(?:\D+(?<n2>(?:\d{1,3}\s)?\d{2,}(?:[.,]\d{1,2})?))?(?:\D+(?<n3>\d{2,}(?:[.,]\d{1,2})?))?/i;
-  const matchSal = oSalaire?.match(reSalaire);
-  if (oSalaire === undefined || oSalaire === null) {
+  const matchSalaire = oSalaire?.match(reSalaire);
+  if (!estRenseigne(oSalaire)) {
     statut = `⚠️ salaire non renseigné - ${statut}`;
-  } else if (matchSal === null) {
+  } else if (matchSalaire === null) {
     statut = `⚠️ salaire non identifié - ${statut}`;
   } else {
-    const n1 = parseFloat(
-      matchSal.groups.n1?.replaceAll(",", ".").replaceAll(" ", ""),
-    ) ||
-      0;
-    const n2 = parseFloat(
-      matchSal.groups.n2?.replaceAll(",", ".").replaceAll(" ", ""),
-    ) ||
-      0;
-    const n3 = parseFloat(
-      matchSal.groups.n3?.replaceAll(",", ".").replaceAll(" ", ""),
-    ) ||
-      0;
+    const n1 = parseNombre(matchSalaire.groups.n1);
+    const n2 = parseNombre(matchSalaire.groups.n2);
+    const n3 = parseNombre(matchSalaire.groups.n3);
 
     if (n1 <= 0) {
       statut = `⚠️ salaire non identifié - ${statut}`;
@@ -216,7 +205,7 @@ const parseOffre = async (offre) => {
       salaireMax = n1;
 
       if (n3 <= 0 && n2 <= 0) {
-        // si ça arrive, pas de problème salaireMax = salaireMin et salaireDuree = 12
+        // salaireMax = salaireMin et salaireDuree = 12.
       } else if (n3 <= 0 && n2 > n1) {
         salaireMax = n2;
       } else if (n3 <= 0 && n2 >= 12 && n2 <= salaireDureeMax) {
@@ -228,7 +217,7 @@ const parseOffre = async (offre) => {
         statut = `⚠️ salaire mal formaté ${n1}, ${n2}, ${n3} - ${statut}`;
       }
 
-      // Tous les salaires sont convertis en salaires mensuels
+      // Tous les salaires sont convertis en salaires mensuels.
       if (salaireMin > salaireMensuelMax) {
         salairePeriode = periodicite.annuel;
         salaireMin /= 12;
@@ -237,7 +226,6 @@ const parseOffre = async (offre) => {
         salairePeriode = periodicite.mensuel;
       } else if (salaireMin > 0) {
         salairePeriode = periodicite.horaire;
-        const semainesParMois = 52 / 12;
         salaireMin *= horaireHebdo * semainesParMois;
         salaireMax *= horaireHebdo * semainesParMois;
       }
@@ -246,13 +234,13 @@ const parseOffre = async (offre) => {
       salaireMax = Math.ceil(salaireMax);
 
       if (estSalaireBrut) {
-        salaireNetMin = await calculerSalaireNet(salaireMin, estCadre);
-        salaireNetMax = await calculerSalaireNet(salaireMax, estCadre);
+        [salaireNetMin, salaireNetMax] = await Promise.all([
+          calculerSalaireNet(salaireMin, estCadre),
+          calculerSalaireNet(salaireMax, estCadre),
+        ]);
       }
 
-      if (salaireDuree > salaireDureeMax) {
-        statut = `⚠️ salaire sur ${salaireDuree} mois incorrect - ${statut}`;
-      } else if (salaireDuree > 12 && salaireDuree <= salaireDureeMax) {
+      if (salaireDuree > 12 && salaireDuree <= salaireDureeMax) {
         avantages.push(`salaire sur ${salaireDuree} mois`);
       }
     }
@@ -263,118 +251,120 @@ const parseOffre = async (offre) => {
     avantages.push("débutant(e) accepté(e)");
   }
 
-  for (const avantage of offre.listeAvantages ?? []) {
-    avantages.push(avantage);
-  }
+  avantages.push(...(offre.listeAvantages ?? []));
 
   return {
-    statut: statut,
     ok: true,
-    titre: titre,
-    description: oDescription,
-    contrat: contrat,
-    horaireHebdo: horaireHebdo,
-    lieuAEn: lieuAEn,
-    lieu: lieu,
-    salaireMin: salaireMin,
-    salaireMax: salaireMax,
-    salaireNetMin: salaireNetMin,
-    salaireNetMax: salaireNetMax,
-    salaireDuree: salaireDuree,
-    salairePeriode: salairePeriode,
-    estSalaireBrut: estSalaireBrut,
-    entreprise: entreprise,
-    pageEntreprise: pageEntreprise,
-    avantages: avantages,
-    debutant: debutant,
+    statut,
+    titre,
+    description,
+    contrat,
+    horaireHebdo,
+    lieuAEn,
+    lieu,
+    salaireMin,
+    salaireMax,
+    salaireNetMin,
+    salaireNetMax,
+    salaireDuree,
+    salairePeriode,
+    estSalaireBrut,
+    entreprise,
+    pageEntreprise,
+    avantages,
+    debutant,
     dateDerniereModification: offre.dateDerniereModification,
   };
 };
 
+const formaterSalaire = (minimum, maximum) =>
+  maximum - minimum > 10 ? `${minimum}€ à ${maximum}€` : `${minimum}€`;
+
+const choisirTags = (nombre) => {
+  const melange = [...tags];
+  for (let i = melange.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [melange[i], melange[j]] = [melange[j], melange[i]];
+  }
+  return melange.slice(0, nombre).join(" ");
+};
+
 // creerPublication crée le texte de la publication à partir des offres.
 const creerPublication = () => {
+  const offresValides = [...offres.values()].filter((offre) => offre?.ok);
+  if (offresValides.length === 0) {
+    return "Aucune offre disponible";
+  }
+
+  const uneSeuleOffre = offresValides.length === 1;
   const lieux = [];
   let lieuAEn = "";
   let entreprise = "";
   let pageEntreprise = "";
   let pubOffres = "";
-  let auMoinsUneOffre = false;
   let auMoinsUnSalaireBrut = false;
 
   for (const [noOffre, offre] of offres) {
-    if (!offre.ok) continue;
+    if (!offre?.ok) continue;
 
-    auMoinsUneOffre = true;
-
-    if (lieux.indexOf(offre.lieu) === -1) {
-      if (lieuAEn === "") {
+    if (!lieux.includes(offre.lieu)) {
+      if (!lieuAEn) {
         lieuAEn = offre.lieuAEn;
       }
       lieux.push(offre.lieu);
     }
 
-    if (entreprise === "" && offre.entreprise !== "") {
+    if (!entreprise && offre.entreprise) {
       entreprise = offre.entreprise;
       pageEntreprise = offre.pageEntreprise;
     }
 
-    pubOffres += (nbOffres === 1 ? "" : "\n🔹 ") +
-      `${offre.titre} 📜 ${offre.contrat} ⌛ ${offre.horaireHebdo}h / semaine`;
+    pubOffres += `${uneSeuleOffre ? "" : "\n🔹 "}${offre.titre} ` +
+      `📜 ${offre.contrat} ⌛ ${offre.horaireHebdo}h / semaine`;
 
     if (offre.salaireMin !== 0) {
       if (offre.estSalaireBrut) {
         auMoinsUnSalaireBrut = true;
-        pubOffres += ` 💰 ${offre.salaireMin}€`;
-        if (offre.salaireMax - offre.salaireMin > 10) {
-          pubOffres += ` à ${offre.salaireMax}€`;
-        }
-
-        pubOffres += ` BRUT / mois (💶 ${offre.salaireNetMin}€`;
-        if (offre.salaireMax - offre.salaireMin > 10) {
-          pubOffres += ` à ${offre.salaireNetMax}€`;
-        }
-        pubOffres += " NET / mois¹)";
+        pubOffres += ` 💰 ${
+          formaterSalaire(offre.salaireMin, offre.salaireMax)
+        } BRUT / mois`;
+        pubOffres += ` (💶 ${
+          formaterSalaire(offre.salaireNetMin, offre.salaireNetMax)
+        } NET / mois¹)`;
       } else {
-        pubOffres += ` 💶 ${offre.salaireMin}€`;
-        if (offre.salaireMax - offre.salaireMin > 10) {
-          pubOffres += ` à ${offre.salaireMax}€`;
-        }
-        pubOffres += " NET / mois";
+        pubOffres += ` 💶 ${
+          formaterSalaire(offre.salaireMin, offre.salaireMax)
+        } NET / mois`;
       }
     }
 
-    if (offre.avantages.length !== 0) {
-      pubOffres += " ✅ " + offre.avantages.join(", ");
+    if (offre.avantages.length > 0) {
+      pubOffres += ` ✅ ${offre.avantages.join(", ")}`;
     }
 
-    if (nbOffres === 1) {
+    if (uneSeuleOffre) {
       pubOffres += ".\nPour plus d'informations et pour postuler";
     }
 
     pubOffres += ` 👉 ${lienOffre}${noOffre}\n`;
   }
 
-  if (!auMoinsUneOffre) {
-    return "Aucune offre disponible";
-  }
-
   let pubPied = "\n";
-  if (pageEntreprise !== "") {
+  if (pageEntreprise) {
     pubPied =
       `\nPour découvrir l'entreprise et toutes ses offres d'emploi 👉 ${pageEntreprise}`;
   }
   if (auMoinsUnSalaireBrut) {
-    pubPied += `\n\¹Le salaire NET est donné à titre indicatif.`;
+    pubPied += "\n¹Le salaire NET est donné à titre indicatif.";
   }
+  pubPied += `\n${choisirTags(3)}`;
 
-  pubPied += "\n" + tags.sort(() => 0.5 - Math.random()).slice(0, 3).join(" ");
-
-  let pubEntete = "OFFRE" + (nbOffres === 1 ? "" : "S") + " D'EMPLOI" +
-    lieuAEn + lieux.sort().join(", ");
-  if (entreprise !== "") {
+  let pubEntete = `OFFRE${uneSeuleOffre ? "" : "S"} D'EMPLOI${lieuAEn}${
+    lieux.sort().join(", ")
+  }`;
+  if (entreprise) {
     pubEntete += ` pour ${entreprise}`;
   }
-
   pubEntete += " : ";
 
   return pubEntete + pubOffres + pubPied;
@@ -383,43 +373,32 @@ const creerPublication = () => {
 // main
 document.addEventListener("DOMContentLoaded", () => {
   const form = document.getElementById("form");
-  form.addEventListener("submit", (e) => {
-    e.preventDefault();
+  if (!form) return;
+
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
 
     extraireNoOffres(eltTexte.value);
     initOffres();
 
-    const promFetch = [];
-    for (const [noOffre] of offres) {
-      promFetch.push(fetchOffre(noOffre));
-    }
+    await Promise.allSettled([...offres.keys()].map(fetchOffre));
 
-    Promise.allSettled(promFetch)
-      .then(() => {
-        console.log("offres", offres);
-        const pub = creerPublication();
-        eltPublication.value = pub;
-        eltPublication.rows = pub.match(/\n/g).length + 1;
-      })
-      .catch((error) => {
-        console.log("error", error);
-      });
+    const publication = creerPublication();
+    eltPublication.value = publication;
+    eltPublication.rows = publication.split("\n").length;
   });
 
   const copyButton = document.getElementById("btnCopyPublication");
-
   if (!copyButton || !eltPublication) return;
 
   copyButton.addEventListener("click", async () => {
-    const text = eltPublication.value;
     const originalLabel = copyButton.textContent;
 
     try {
-      await navigator.clipboard.writeText(text);
-
+      await navigator.clipboard.writeText(eltPublication.value);
       copyButton.textContent = "Copié !";
-    } catch (err) {
-      console.error("Erreur lors de la copie :", err);
+    } catch (error) {
+      console.error("Erreur lors de la copie :", error);
     } finally {
       setTimeout(() => {
         copyButton.textContent = originalLabel;
