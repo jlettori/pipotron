@@ -6,12 +6,99 @@ const urlSalaireNet = (salaireBrut, estCadre) => {
   return `/api/salaire-net/${brut}/${cadre}`;
 };
 
+// Limite le nombre de requêtes simultanées pour éviter les erreurs 429/502.
+const nbRequetesSimultaneesMax = 2;
+const nbTentativesMax = 3;
+const delaiReessaiBase = 1000;
+const delaiReessaiMax = 5000;
+
+const attendre = (delai) =>
+  new Promise((resolve) => setTimeout(resolve, delai));
+
+// creerFileAttente renvoie une fonction qui exécute au plus `limite`
+// opérations à la fois, dans l'ordre d'arrivée.
+const creerFileAttente = (limite) => {
+  let actives = 0;
+  const enAttente = [];
+
+  const lancerSuivantes = () => {
+    while (actives < limite && enAttente.length > 0) {
+      const { operation, resolve, reject } = enAttente.shift();
+      actives += 1;
+
+      Promise.resolve()
+        .then(operation)
+        .then(resolve, reject)
+        .finally(() => {
+          actives -= 1;
+          lancerSuivantes();
+        });
+    }
+  };
+
+  return (operation) =>
+    new Promise((resolve, reject) => {
+      enAttente.push({ operation, resolve, reject });
+      lancerSuivantes();
+    });
+};
+
+const requeteLimitee = creerFileAttente(nbRequetesSimultaneesMax);
+
+const estErreurTemporaire = (status) =>
+  status === 408 || status === 429 || status >= 500;
+
+const delaiReessai = (tentative) => {
+  const delai = Math.min(
+    delaiReessaiBase * 2 ** (tentative - 1),
+    delaiReessaiMax,
+  );
+  return delai + Math.floor(Math.random() * 250);
+};
+
+// fetchAvecReessai limite les appels et réessaie les erreurs temporaires.
+const fetchAvecReessai = async (
+  url,
+  { message404 = "Ressource non disponible", onReessai } = {},
+) => {
+  for (let tentative = 1; tentative <= nbTentativesMax; tentative++) {
+    let response;
+    try {
+      response = await requeteLimitee(() => fetch(url));
+    } catch (error) {
+      if (tentative === nbTentativesMax) throw error;
+      onReessai?.(tentative + 1, error);
+      await attendre(delaiReessai(tentative));
+      continue;
+    }
+
+    if (response.ok) return response;
+    if (response.status === 404) throw new Error(message404);
+
+    const erreur = new Error(
+      response.status === 429
+        ? "Trop de requêtes (429)"
+        : `Erreur HTTP ${response.status}`,
+    );
+    if (
+      !estErreurTemporaire(response.status) || tentative === nbTentativesMax
+    ) {
+      throw erreur;
+    }
+
+    onReessai?.(tentative + 1, erreur);
+    await attendre(delaiReessai(tentative));
+  }
+
+  throw new Error("Échec de la requête");
+};
+
 // calculerSalaireNet calcule le salaire net mensuel via l'API serveur.
 const calculerSalaireNet = async (salaireBrut, estCadre) => {
-  const response = await fetch(urlSalaireNet(salaireBrut, estCadre));
-  if (!response.ok) {
-    throw new Error(`Erreur HTTP ${response.status}`);
-  }
+  const response = await fetchAvecReessai(
+    urlSalaireNet(salaireBrut, estCadre),
+    { message404: "Salaire net indisponible" },
+  );
 
   const { salaireNet } = await response.json();
   if (!Number.isFinite(salaireNet)) {
@@ -106,14 +193,17 @@ const afficherStatutOffre = (noOffre) => {
 // fetchOffre récupère l'offre sur francetravail.fr.
 const fetchOffre = async (noOffre) => {
   try {
-    const response = await fetch(urlOffre(noOffre));
-
-    if (response.status === 404) {
-      throw new Error("Offre non disponible");
-    }
-    if (!response.ok) {
-      throw new Error(`Erreur HTTP ${response.status}`);
-    }
+    const response = await fetchAvecReessai(urlOffre(noOffre), {
+      message404: "Offre non disponible",
+      onReessai: (tentative, error) => {
+        offres.set(noOffre, {
+          ok: false,
+          statut:
+            `⏳ ${error.message} - tentative ${tentative}/${nbTentativesMax}`,
+        });
+        afficherStatutOffre(noOffre);
+      },
+    });
 
     const infos = await parseOffre(await response.json());
     offres.set(
