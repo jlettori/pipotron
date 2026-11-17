@@ -261,8 +261,8 @@ const parseOffre = async (offre) => {
     ? offre.etablissement?.libelleEnseigne || ""
     : "";
 
-  const pageEntreprise = offre.etablissement?.urlEntreprise ||
-    offre.pageEmployeurUrl ||
+  const pageEntreprise = offre.pageEmployeurUrl ||
+    offre.etablissement?.urlEntreprise ||
     "";
 
   const avantages = [];
