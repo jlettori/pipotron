@@ -439,7 +439,7 @@ const creerPublication = () => {
     pubOffres += ` 👉 ${lienOffre}${noOffre}\n`;
   }
 
-  let pubPied = "\n";
+  let pubPied = "";
   if (pageEntreprise) {
     pubPied =
       `\nPour découvrir l'entreprise et toutes ses offres d'emploi 👉 ${pageEntreprise}`;
